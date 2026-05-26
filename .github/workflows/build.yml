@@ -1,0 +1,63 @@
+name: Build Orthora iOS TIPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: |
+          brew install ldid zip unzip xz
+          sudo mkdir -p /opt/theos
+          sudo chown $USER /opt/theos
+          git clone --depth=1 https://github.com/theos/theos.git /opt/theos
+          curl -fsSL https://raw.githubusercontent.com/theos/sdks/main/master.sh | bash
+          export THEOS=/opt/theos
+      - name: Build dylib
+        run: |
+          export THEOS=/opt/theos
+          cd ios/orthora
+          make clean || true
+          make package FINALPACKAGE=1 THEOS=/opt/theos
+      - name: Prepare dylib zips
+        run: |
+          DYLIB=$(find ios/orthora/.theos -name "*.dylib" -type f | head -1)
+          echo "Dylib: $DYLIB"
+          for region in kgvn kgtw kgth; do
+            mkdir -p /tmp/zip/AWSS3.framework
+            cp "$DYLIB" /tmp/zip/AWSS3.framework/AWSS3
+            cd /tmp/zip && zip -r "$GITHUB_WORKSPACE/ios/tipa_builder/dylibs/$region.zip" "AWSS3.framework/" && cd /
+            rm -rf /tmp/zip
+          done
+      - name: Build insert_dylib
+        run: |
+          cd /tmp
+          git clone https://github.com/Tyilo/insert_dylib.git
+          cd insert_dylib && clang -O2 insert_dylib.c -o insert_dylib -framework CoreFoundation
+          cp insert_dylib /usr/bin/unzip "$GITHUB_WORKSPACE/ios/tipa_builder/tools/"
+      - name: Build Patcher App
+        run: |
+          export THEOS=/opt/theos
+          cd ios/tipa_builder/patcher/patchlq
+          make clean || true
+          make package FINALPACKAGE=1 THEOS=/opt/theos
+          PATCHER_APP=$(find .theos -name "*.app" -type d | head -1)
+          mkdir -p /tmp/out/Payload
+          cp -R "$PATCHER_APP" /tmp/out/Payload/patchlq.app
+          cp "$GITHUB_WORKSPACE/ios/tipa_builder/tools/insert_dylib" /tmp/out/Payload/patchlq.app/
+          cp /usr/bin/unzip /tmp/out/Payload/patchlq.app/
+          chmod +x /tmp/out/Payload/patchlq.app/insert_dylib /tmp/out/Payload/patchlq.app/unzip
+          mkdir -p /tmp/out/Payload/patchlq.app/dylibs
+          cp "$GITHUB_WORKSPACE/ios/tipa_builder/dylibs/"*.zip /tmp/out/Payload/patchlq.app/dylibs/
+          ldid -S ios/tipa_builder/patcher/patchlq/entitlements.plist /tmp/out/Payload/patchlq.app/patchlq 2>/dev/null || true
+          cd /tmp/out && zip -r "$GITHUB_WORKSPACE/orthora.tipa" "Payload/"
+      - name: Upload TIPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: orthora-tipa
+          path: orthora.tipa
