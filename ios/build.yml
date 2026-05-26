@@ -1,0 +1,122 @@
+name: Build Orthora iOS TIPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        region: [kgvn, kgtw, kgth]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          brew install ldid zip unzip xz
+          # Install Theos
+          sudo mkdir -p /opt/theos
+          sudo chown $USER /opt/theos
+          git clone --depth=1 https://github.com/theos/theos.git /opt/theos
+          curl -fsSL https://raw.githubusercontent.com/theos/sdks/main/master.sh | bash
+          ls /opt/theos/sdks/
+          export THEOS=/opt/theos
+
+      - name: Build orthora.dylib
+        run: |
+          export THEOS=/opt/theos
+          cd ios/orthora
+          make clean || true
+          make package FINALPACKAGE=1 THEOS=/opt/theos
+          ls -la .theos/obj/
+
+      - name: Prepare dylib zips
+        run: |
+          export THEOS=/opt/theos
+          cd ios/tipa_builder
+          mkdir -p dylibs tools output
+
+          DYLIB=$(find ../orthora/.theos -name "*.dylib" -type f | head -1)
+          if [ -z "$DYLIB" ]; then
+            echo "ERROR: dylib not found!"
+            exit 1
+          fi
+          echo "Dylib found: $DYLIB"
+
+          for region in kgvn kgtw kgth; do
+            mkdir -p /tmp/zip/AWSS3.framework
+            cp "$DYLIB" /tmp/zip/AWSS3.framework/AWSS3
+            cd /tmp/zip
+            zip -r "$GITHUB_WORKSPACE/ios/tipa_builder/dylibs/$region.zip" "AWSS3.framework/"
+            cd /tmp
+            rm -rf /tmp/zip
+            echo "Created $region.zip"
+          done
+
+      - name: Build insert_dylib
+        run: |
+          cd /tmp
+          git clone https://github.com/Tyilo/insert_dylib.git
+          cd insert_dylib
+          clang -O2 insert_dylib.c -o insert_dylib -framework CoreFoundation
+          cp insert_dylib "$GITHUB_WORKSPACE/ios/tipa_builder/tools/"
+          echo "insert_dylib built"
+          
+          # Use system unzip
+          cp /usr/bin/unzip "$GITHUB_WORKSPACE/ios/tipa_builder/tools/"
+
+      - name: Build Patcher App
+        run: |
+          export THEOS=/opt/theos
+          cd ios/tipa_builder/patcher/patchlq
+          make clean || true
+          make package FINALPACKAGE=1 THEOS=/opt/theos
+
+          PATCHER_APP=$(find .theos -name "*.app" -type d | head -1)
+          if [ -z "$PATCHER_APP" ]; then
+            echo "ERROR: Patcher app not found!"
+            exit 1
+          fi
+
+          # Assemble TIPA
+          mkdir -p /tmp/tiqa_build/Payload
+          cp -R "$PATCHER_APP" /tmp/tiqa_build/Payload/patchlq.app
+
+          # Inject tools and dylibs
+          cp "$GITHUB_WORKSPACE/ios/tipa_builder/tools/insert_dylib" /tmp/tiqa_build/Payload/patchlq.app/
+          cp "$GITHUB_WORKSPACE/ios/tipa_builder/tools/unzip" /tmp/tiqa_build/Payload/patchlq.app/
+          chmod +x /tmp/tiqa_build/Payload/patchlq.app/insert_dylib
+          chmod +x /tmp/tiqa_build/Payload/patchlq.app/unzip
+
+          mkdir -p /tmp/tiqa_build/Payload/patchlq.app/dylibs
+          for region in kgvn kgtw kgth; do
+            cp "$GITHUB_WORKSPACE/ios/tipa_builder/dylibs/$region.zip" /tmp/tiqa_build/Payload/patchlq.app/dylibs/
+          done
+
+          # Sign
+          ldid -S ios/tipa_builder/patcher/patchlq/entitlements.plist /tmp/tiqa_build/Payload/patchlq.app/patchlq
+
+          # Package
+          cd /tmp/tiqa_build
+          zip -r "$GITHUB_WORKSPACE/ios/tipa_builder/output/orthora.tipa" "Payload/"
+          ls -la "$GITHUB_WORKSPACE/ios/tipa_builder/output/"
+
+      - name: Upload TIPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: orthora-tipa
+          path: ios/tipa_builder/output/orthora.tipa
+          if-no-files-found: error
+
+      - name: Upload dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: orthora-dylib
+          path: ios/orthora/.theos/obj/*.dylib
+          if-no-files-found: warn
