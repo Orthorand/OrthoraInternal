@@ -1,0 +1,9 @@
+Package: com.orthora.ios
+Name: Orthora iOS
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: IL2CPP Dump + ESP for AOV iOS
+Maintainer: Orthora
+Author: Orthora
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000)

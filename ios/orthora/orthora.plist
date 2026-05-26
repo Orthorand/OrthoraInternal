@@ -1,0 +1,9 @@
+{
+    Filter = {
+        Bundles = (
+            "com.garena.game.kgvn",
+            "com.garena.game.kgtw",
+            "com.tencent.tmgp.sgame",
+        );
+    };
+}

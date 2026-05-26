@@ -1,0 +1,69 @@
+╔══════════════════════════════════════════════════════════════╗
+║           BUILD iOS TIPA FROM WINDOWS - HƯỚNG DẪN           ║
+╚══════════════════════════════════════════════════════════════╝
+
+Vì Windows không compile được iOS (Mach-O), cần build qua 1 trong 3 cách sau:
+
+╔══════════════════════════════════════════════════════════════╗
+║ CÁCH 1: BUILD TRỰC TIẾP TRÊN iOS JAILBREAK (Dễ nhất)      ║
+╚══════════════════════════════════════════════════════════════╝
+
+  B1: Cài Theos trên iPhone jailbreak
+     - Mở NewTerm (hoặc SSH từ Windows)
+     - Chạy: bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+
+  B2: Copy source code lên iPhone
+     - Qua SSH:
+       cd /var/mobile/Documents
+       git clone https://github.com/YOUR_USER/orthora.git
+       # hoặc dùng scp từ Windows:
+       # scp -r C:\Users\ngvie\Desktop\orthora\ios root@<device-ip>:/var/mobile/Documents/
+
+  B3: Build TIPA
+     ssh root@<device-ip>
+     cd /var/mobile/Documents/orthora/ios/tipa_builder
+     bash scripts/ondevice_build.sh
+     # Output: output/orthora.tipa (~50MB)
+
+  B4: Install
+     - Mở Filza → tìm output/orthora.tipa
+     - Open in TrollStore → Install
+     - Mở "Orthora Patch" → chọn region → Patch Hack
+
+
+╔══════════════════════════════════════════════════════════════╗
+║ CÁCH 2: GITHUB ACTIONS (Không cần Mac, build trên cloud)   ║
+╚══════════════════════════════════════════════════════════════╝
+
+  B1: Push source lên GitHub
+     - Tạo repo mới trên github.com
+     - Trong terminal Windows:
+       cd C:\Users\ngvie\Desktop\liqimibi
+       git init
+       git add .
+       git commit -m "initial"
+       git remote add origin https://github.com/YOUR_USER/orthora.git
+       git push -u origin main
+
+  B2: Thêm GitHub Actions workflow
+     File: .github/workflows/build.yml (nội dung ở cuối file này)
+     
+  B3: Vào GitHub repo → Actions → chọn workflow → Run workflow
+     → Sau 5-10 phút, download .tipa từ Artifacts
+
+  B4: AirDrop .tipa → TrollStore → Install → Patch → Chơi
+
+
+╔══════════════════════════════════════════════════════════════╗
+║ CÁCH 3: DÙNG MACOS ẢO / THUÊ SERVER                       ║
+╚══════════════════════════════════════════════════════════════╝
+
+  - Dùng macOS VM (hơi khó trên Windows)
+  - Thuê Mac Mini: macstadium.com, macincloud.com (~$20/tháng)
+  - Hoặc mượn Mac của bạn bè, build 1 lần là xong
+
+
+╔══════════════════════════════════════════════════════════════╗
+║ FILE: .github/workflows/build.yml                           ║
+║ (Tạo file này trong repo GitHub để tự động build trên cloud)║
+╚══════════════════════════════════════════════════════════════╝
