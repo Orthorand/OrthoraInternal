@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Dependencies
         run: |
-          brew install ldid zip unzip xz
+          brew install ldid zip unzip xz dpkg
           sudo mkdir -p /opt/theos
           sudo chown $USER /opt/theos
           git clone --depth=1 https://github.com/theos/theos.git /opt/theos
